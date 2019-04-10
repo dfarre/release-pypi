@@ -1,0 +1,15 @@
+*.pyc
+__pycache__
+
+*.egg-info
+dist
+build
+.eggs
+
+.pytest_cache
+.coverage
+.coverage.*
+.tox
+
+.msg
+.secrets.ini

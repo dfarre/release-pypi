@@ -1,0 +1,5 @@
+[report]
+exclude_lines =
+    raise NotImplementedError
+    raise AssertionError
+fail_under = 100
