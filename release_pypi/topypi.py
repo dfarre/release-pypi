@@ -1,12 +1,15 @@
 import configparser
 import os
+from packaging import version
 import shutil
 import subprocess
 import sys
 
-from packaging import version
-
 from simple_cmd import decorators
+
+from release_pypi.exceptions import SecretsNotFound, WrongGitStatus
+
+SECRETS_PATH = '.secrets.ini'
 
 
 class VersionFile:
@@ -69,9 +72,38 @@ def upload_cmd(config, test_pypi):
                  if test_pypi else []) + ['dist/*']
 
 
-@decorators.ErrorsCommand(FileNotFoundError, subprocess.CalledProcessError, help={
-    'inc': 'Version number increments (0s left)'})
-def release_pypi(*inc: int, test_pypi: 'Use test.pypi.org' = False,
+def git_push_tag_cmds(version_file):
+    return [['git', 'add', version_file.path],
+            ['git', 'commit', '-m', 'Release'],
+            ['git', 'tag', version_file.ini['version']['value']],
+            ['git', 'push', '--tags', 'origin', 'HEAD']]
+
+
+def check_secrets_present(secrets_ini, test_pypi):
+    if not secrets_ini.has_option('pypi', 'user'):
+        raise SecretsNotFound(
+            f"{SECRETS_PATH} with 'pypi' section containing 'user' not found")
+
+    if test_pypi and not secrets_ini.has_option('pypi', 'test_password'):
+        raise SecretsNotFound(
+            f"'test_password' not found in {SECRETS_PATH} 'pypi' section")
+
+    if not test_pypi and not secrets_ini.has_option('pypi', 'password'):
+        raise SecretsNotFound(
+            f"'password' not found in {SECRETS_PATH} 'pypi' section")
+
+
+def check_git_status(version_file):
+    git_status = subprocess.check_output(('git', 'status', '--porcelain')).decode().strip()
+
+    if git_status != f'M {version_file.path}':
+        raise WrongGitStatus('Clean the git status to push a commit '
+                             f'with the new {version_file.path} only')
+
+
+@decorators.ErrorsCommand(FileNotFoundError, subprocess.CalledProcessError, WrongGitStatus,
+                          SecretsNotFound, help={'inc': 'Version number increments (0s left)'})
+def release_pypi(*inc: int, test_pypi: 'Just push to test.pypi.org' = False,
                  pre: 'Release Candidate qualifier increment' = 0,
                  post: 'Post-release qualifier increment' = 0,
                  dev: 'Development release qualifier increment' = 0):
@@ -90,17 +122,28 @@ def release_pypi(*inc: int, test_pypi: 'Use test.pypi.org' = False,
 
     check_output('python', 'setup.py', 'sdist', 'bdist_wheel')
     secrets = configparser.ConfigParser()
-    secrets.read('.secrets.ini')
+    secrets.read(SECRETS_PATH)
+    check_secrets_present(secrets, test_pypi)
 
     if test_pypi:
         check_output(*upload_cmd(secrets['pypi'], test_pypi))
-    else:
-        go, choices = '', {'Yes': True, 'No': False}
+        return 0
 
-        while not (go in choices):
-            go = input(f'Upload {version_file} to PyPI ({"/".join(choices)})? ')
+    check_git_status(version_file)
 
-        if choices[go]:
-            check_output(*upload_cmd(secrets['pypi'], test_pypi))
-        else:
-            sys.stdout.write('Aborted\n')
+    go, choices = '', {'Yes': True, 'No': False}
+
+    while not (go in choices):
+        go = input(f'Upload {version_file} to PyPI, and git-push tag and '
+                   f'{version_file.path} to origin HEAD ({"/".join(choices)})? ')
+
+    if choices[go] is False:
+        sys.stdout.write('Aborted\n')
+        return 0
+
+    check_output(*upload_cmd(secrets['pypi'], test_pypi))
+
+    for cmd in git_push_tag_cmds(version_file):
+        check_output(*cmd)
+
+    return 0

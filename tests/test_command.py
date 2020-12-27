@@ -54,7 +54,14 @@ class ToPyPiTests(unittest.TestCase):
     version_path = 'version.ini'
     secrets_path = '.secrets.ini'
     pypi_secrets = {'user': 'Alice', 'test_password': 'T', 'password': 'P'}
-    sdist_call = mock.call('python', 'setup.py', 'sdist', 'bdist_wheel')
+    sdist_call = mock.call(('python', 'setup.py', 'sdist', 'bdist_wheel'))
+    twine_call = mock.call(('twine', 'fake'))
+    git_status_call = mock.call(('git', 'status', '--porcelain'))
+    git_push_calls = [mock.call(tup) for tup in [
+        ('git', 'add', 'version.ini'),
+        ('git', 'commit', '-m', 'Release'),
+        ('git', 'tag', '1.1.dev0'),
+        ('git', 'push', '--tags', 'origin', 'HEAD')]]
 
     def setUp(self):
         self.version_ini = configparser.ConfigParser()
@@ -95,29 +102,35 @@ class ToPyPiTests(unittest.TestCase):
         check_output_mock.assert_called_once_with(('fake', 'cl'))
         stdout_mock.assert_called_once_with('foo')
 
-    @mock.patch('release_pypi.topypi.upload_cmd', return_value=['fake', 'line'])
-    @mock.patch('release_pypi.topypi.check_output')
+    @mock.patch('release_pypi.topypi.upload_cmd', return_value=['twine', 'fake'])
+    @mock.patch('subprocess.check_output', return_value=b'Foo')
     def test_test_pypi(self, check_output_mock, upload_cmd_mock):
         assert topypi.release_pypi.call(1, 1, pre=1, dev=1, test_pypi=True) == 0
         assert list(map(str, upload_cmd_mock.call_args_list)) == [
             'call(<Section: pypi>, True)']
-        assert check_output_mock.call_args_list == [self.sdist_call, mock.call('fake', 'line')]
+        assert check_output_mock.call_args_list == [self.sdist_call, self.twine_call]
 
     @mock.patch('builtins.input', return_value='Yes')
-    @mock.patch('release_pypi.topypi.upload_cmd', return_value=['fake', 'cl'])
-    @mock.patch('release_pypi.topypi.check_output')
+    @mock.patch('release_pypi.topypi.upload_cmd', return_value=['twine', 'fake'])
+    @mock.patch('subprocess.check_output', return_value=b'M version.ini')
     def test_yes(self, check_output_mock, upload_cmd_mock, input_mock):
         assert topypi.release_pypi.call(1, dev=1, test_pypi=False) == 0
         input_mock.assert_called_once_with(
-            'Upload release-pypi-1.1.dev0 to PyPI (Yes/No)? ')
+            'Upload release-pypi-1.1.dev0 to PyPI, and git-push tag and version.ini'
+            ' to origin HEAD (Yes/No)? ')
         assert list(map(str, upload_cmd_mock.call_args_list)) == [
             'call(<Section: pypi>, False)']
-        assert check_output_mock.call_args_list == [self.sdist_call, mock.call('fake', 'cl')]
+        assert check_output_mock.call_args_list == [
+            self.sdist_call, self.git_status_call, self.twine_call] + self.git_push_calls
 
+    @mock.patch('subprocess.check_output', return_value=b'M version.ini')
     @mock.patch('builtins.input', return_value='No')
     @mock.patch('sys.stdout.write')
-    def test_aborted(self, stdout_mock, input_mock):
+    def test_aborted(self, stdout_mock, input_mock, check_output_mock):
         assert topypi.release_pypi.call(test_pypi=False) == 0
-        input_mock.assert_called_once_with('Upload release-pypi-1.0rc1 to PyPI (Yes/No)? ')
+        input_mock.assert_called_once_with(
+            'Upload release-pypi-1.0rc1 to PyPI, and git-push tag and version.ini'
+            ' to origin HEAD (Yes/No)? ')
         assert len(stdout_mock.call_args_list) == 2
         assert stdout_mock.call_args == mock.call('Aborted\n')
+        assert check_output_mock.call_args_list == [self.sdist_call, self.git_status_call]
