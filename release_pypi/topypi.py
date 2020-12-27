@@ -6,7 +6,7 @@ import sys
 
 from packaging import version
 
-from simple_cmd import commands
+from simple_cmd import decorators
 
 
 class VersionFile:
@@ -58,54 +58,49 @@ class VersionFile:
         self.put(f'{self.v.base_version}.{quals}')
 
 
-class ToPyPI(commands.ErrorsCommand):
-    arguments = (
-        (('inc',), dict(nargs='*', type=int, help='Version number increments (0s left)')),
-        (('--test-pypi',), dict(action='store_true', help='Use test.pypi.org')), *(
-            ((f'--{qal}',), dict(type=int, help='Qualifier increment'))
-            for qal in VersionFile.qualifiers))
-    exceptions = (FileNotFoundError, subprocess.CalledProcessError)
+def check_output(*cmd):
+    sys.stdout.write(subprocess.check_output(cmd).decode())
 
-    @staticmethod
-    def check_output(*cmd):
-        sys.stdout.write(subprocess.check_output(cmd).decode())
 
-    @staticmethod
-    def upload_cmd(config, test_pypi):
-        return ['twine', 'upload', '-u', config['user'], '-p',
-                config['test_password'] if test_pypi else config['password']
-                ] + (['--repository-url', 'https://test.pypi.org/legacy/']
-                     if test_pypi else []) + ['dist/*']
+def upload_cmd(config, test_pypi):
+    return ['twine', 'upload', '-u', config['user'], '-p',
+            config['test_password'] if test_pypi else config['password']
+            ] + (['--repository-url', 'https://test.pypi.org/legacy/']
+                 if test_pypi else []) + ['dist/*']
 
-    def try_call(self, **kwargs):
-        version_file, inc = VersionFile(), kwargs.pop('inc')
-        test_pypi = kwargs.pop('test_pypi')
 
-        if inc:
-            version_file.up(*inc)
+@decorators.ErrorsCommand(FileNotFoundError, subprocess.CalledProcessError, help={
+    'inc': 'Version number increments (0s left)'})
+def release_pypi(*inc: int, test_pypi: 'Use test.pypi.org' = False,
+                 pre: 'Release Candidate qualifier increment' = 0,
+                 post: 'Post-release qualifier increment' = 0,
+                 dev: 'Development release qualifier increment' = 0):
+    version_file = VersionFile()
 
-        if kwargs:
-            version_file.qualify(**kwargs)
+    if inc:
+        version_file.up(*inc)
 
-        if os.path.isdir('dist'):
-            shutil.rmtree('dist')
+    qualifier_incs = {k: v for k, v in [('pre', pre), ('post', post), ('dev', dev)] if v}
 
-        self.check_output('python', 'setup.py', 'sdist', 'bdist_wheel')
-        secrets = configparser.ConfigParser()
-        secrets.read('.secrets.ini')
+    if qualifier_incs:
+        version_file.qualify(**qualifier_incs)
 
-        if test_pypi:
-            self.check_output(*self.upload_cmd(secrets['pypi'], test_pypi))
+    if os.path.isdir('dist'):
+        shutil.rmtree('dist')
+
+    check_output('python', 'setup.py', 'sdist', 'bdist_wheel')
+    secrets = configparser.ConfigParser()
+    secrets.read('.secrets.ini')
+
+    if test_pypi:
+        check_output(*upload_cmd(secrets['pypi'], test_pypi))
+    else:
+        go, choices = '', {'Yes': True, 'No': False}
+
+        while not (go in choices):
+            go = input(f'Upload {version_file} to PyPI ({"/".join(choices)})? ')
+
+        if choices[go]:
+            check_output(*upload_cmd(secrets['pypi'], test_pypi))
         else:
-            go, choices = '', {'Yes': True, 'No': False}
-
-            while not (go in choices):
-                go = input(f'Upload {version_file} to PyPI ({"/".join(choices)})? ')
-
-            if choices[go]:
-                self.check_output(*self.upload_cmd(secrets['pypi'], test_pypi))
-            else:
-                sys.stdout.write('Aborted\n')
-
-
-release_pypi = ToPyPI()
+            sys.stdout.write('Aborted\n')
