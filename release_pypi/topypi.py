@@ -115,8 +115,8 @@ def check_secrets_present(secrets_ini, test_pypi):
             f"'password' not found in {SECRETS_PATH} 'pypi' section")
 
 
-@decorators.ErrorsCommand(FileNotFoundError, subprocess.CalledProcessError, WrongGitStatus,
-                          SecretsNotFound, help={'inc': 'Version number increments (0s left)'})
+@decorators.ErrorsCommand(FileNotFoundError, subprocess.CalledProcessError, SecretsNotFound,
+                          WrongGitStatus, help={'inc': 'Version number increments (0s left)'})
 def release_pypi(*inc: int, test_pypi: 'Just push to test.pypi.org' = False,
                  pre: 'Release Candidate qualifier increment' = 0,
                  post: 'Post-release qualifier increment' = 0,

@@ -63,16 +63,21 @@ class ToPyPiTests(unittest.TestCase):
         self.version_ini.read(self.version_path)
 
         self.secrets_ini = configparser.ConfigParser()
-        self.secrets_ini['pypi'] = self.pypi_secrets
+        self.write_secrets(self.pypi_secrets)
 
-        with open(self.secrets_path, 'w') as wfile:
-            self.secrets_ini.write(wfile)
+        os.makedirs('dist', exist_ok=True)
 
     def tearDown(self):
         with open(self.version_path, 'w') as wfile:
             self.version_ini.write(wfile)
 
         os.remove(self.secrets_path)
+
+    def write_secrets(self, secrets):
+        self.secrets_ini['pypi'] = secrets
+
+        with open(self.secrets_path, 'w') as wfile:
+            self.secrets_ini.write(wfile)
 
     @staticmethod
     def git_push_calls(version):
@@ -140,3 +145,29 @@ class ToPyPiTests(unittest.TestCase):
         assert len(stdout_mock.call_args_list) == 2
         assert stdout_mock.call_args == mock.call('Aborted\n')
         assert check_output_mock.call_args_list == [self.sdist_call, self.git_status_call]
+
+    @mock.patch('subprocess.check_output', return_value=b'M fake_file.py')
+    @mock.patch('builtins.input')
+    @mock.patch('sys.stdout.write')
+    def test_wrong_git_status(self, stdout_mock, input_mock, check_output_mock):
+        assert topypi.release_pypi.call(test_pypi=False) == 6
+        input_mock.assert_not_called()
+        assert len(stdout_mock.call_args_list) == 1
+        assert check_output_mock.call_args_list == [self.sdist_call, self.git_status_call]
+
+    @mock.patch('subprocess.check_output', return_value=b'Fake output')
+    @mock.patch('builtins.input')
+    @mock.patch('sys.stdout.write')
+    def test_secrets_not_found(self, stdout_mock, input_mock, check_output_mock):
+        self.write_secrets({})
+        self.assert_secrets_not_found(input_mock)
+
+        self.write_secrets({'user': 'D', 'password': 'P'})
+        self.assert_secrets_not_found(input_mock)
+
+        self.write_secrets({'user': 'D', 'test_password': 'P'})
+        self.assert_secrets_not_found(input_mock, test_pypi=False)
+
+    def assert_secrets_not_found(self, input_mock, test_pypi=True):
+        assert topypi.release_pypi.call(test_pypi=test_pypi) == 5
+        input_mock.assert_not_called()
