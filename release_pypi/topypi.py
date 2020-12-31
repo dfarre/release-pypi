@@ -34,6 +34,20 @@ class VersionFile:
     def name(self):
         return self.ini['version']['name']
 
+    @property
+    def git_push_tag_cmds(self):
+        return [['git', 'add', self.path],
+                ['git', 'commit', '-m', f'Bump version {self.v}'],
+                ['git', 'tag', self.ini['version']['value']],
+                ['git', 'push', '--tags', 'origin', 'HEAD']]
+
+    def check_git_status(self):
+        git_status = subprocess.check_output(('git', 'status', '--porcelain')).decode().strip()
+
+        if git_status != f'M {self.path}':
+            raise WrongGitStatus('Clean the git status to push a commit '
+                                 f'with the new {self.path} only')
+
     def put(self, text, key='value'):
         self.ini['version'][key] = text
 
@@ -72,13 +86,6 @@ def upload_cmd(config, test_pypi):
                  if test_pypi else []) + ['dist/*']
 
 
-def git_push_tag_cmds(version_file):
-    return [['git', 'add', version_file.path],
-            ['git', 'commit', '-m', 'Release'],
-            ['git', 'tag', version_file.ini['version']['value']],
-            ['git', 'push', '--tags', 'origin', 'HEAD']]
-
-
 def check_secrets_present(secrets_ini, test_pypi):
     if not secrets_ini.has_option('pypi', 'user'):
         raise SecretsNotFound(
@@ -91,14 +98,6 @@ def check_secrets_present(secrets_ini, test_pypi):
     if not test_pypi and not secrets_ini.has_option('pypi', 'password'):
         raise SecretsNotFound(
             f"'password' not found in {SECRETS_PATH} 'pypi' section")
-
-
-def check_git_status(version_file):
-    git_status = subprocess.check_output(('git', 'status', '--porcelain')).decode().strip()
-
-    if git_status != f'M {version_file.path}':
-        raise WrongGitStatus('Clean the git status to push a commit '
-                             f'with the new {version_file.path} only')
 
 
 @decorators.ErrorsCommand(FileNotFoundError, subprocess.CalledProcessError, WrongGitStatus,
@@ -129,7 +128,7 @@ def release_pypi(*inc: int, test_pypi: 'Just push to test.pypi.org' = False,
         check_output(*upload_cmd(secrets['pypi'], test_pypi))
         return 0
 
-    check_git_status(version_file)
+    version_file.check_git_status()
 
     go, choices = '', {'Yes': True, 'No': False}
 
@@ -143,7 +142,7 @@ def release_pypi(*inc: int, test_pypi: 'Just push to test.pypi.org' = False,
 
     check_output(*upload_cmd(secrets['pypi'], test_pypi))
 
-    for cmd in git_push_tag_cmds(version_file):
+    for cmd in version_file.git_push_tag_cmds:
         check_output(*cmd)
 
     return 0
