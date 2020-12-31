@@ -13,3 +13,5 @@ build
 
 .msg
 .secrets.ini
+
+version.ini_bk
