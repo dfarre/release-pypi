@@ -26,6 +26,18 @@ class VersionFile:
     def __str__(self):
         return f'{self.name}-{self.v}'
 
+    def __enter__(self):
+        shutil.copy(self.path, f'{self.path}_bk')
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is None:
+            os.remove(f'{self.path}_bk')
+            return True
+
+        shutil.move(f'{self.path}_bk', self.path)
+        return False
+
     @property
     def v(self):
         return version.Version(self.ini['version']['value'])
@@ -37,7 +49,7 @@ class VersionFile:
     @property
     def git_push_tag_cmds(self):
         return [['git', 'add', self.path],
-                ['git', 'commit', '-m', f'Bump version {self.v}'],
+                ['git', 'commit', '-m', f'Bump version to {self.v}'],
                 ['git', 'tag', self.ini['version']['value']],
                 ['git', 'push', '--tags', 'origin', 'HEAD']]
 
@@ -109,43 +121,42 @@ def release_pypi(*inc: int, test_pypi: 'Just push to test.pypi.org' = False,
                  pre: 'Release Candidate qualifier increment' = 0,
                  post: 'Post-release qualifier increment' = 0,
                  dev: 'Development release qualifier increment' = 0):
-    version_file = VersionFile()
+    with VersionFile() as version_file:
+        if inc:
+            version_file.up(*inc)
 
-    if inc:
-        version_file.up(*inc)
+        qualifier_incs = {k: v for k, v in [('pre', pre), ('post', post), ('dev', dev)] if v}
 
-    qualifier_incs = {k: v for k, v in [('pre', pre), ('post', post), ('dev', dev)] if v}
+        if qualifier_incs:
+            version_file.qualify(**qualifier_incs)
 
-    if qualifier_incs:
-        version_file.qualify(**qualifier_incs)
+        if os.path.isdir('dist'):
+            shutil.rmtree('dist')
 
-    if os.path.isdir('dist'):
-        shutil.rmtree('dist')
+        check_output('python', 'setup.py', 'sdist', 'bdist_wheel')
+        secrets = configparser.ConfigParser()
+        secrets.read(SECRETS_PATH)
+        check_secrets_present(secrets, test_pypi)
 
-    check_output('python', 'setup.py', 'sdist', 'bdist_wheel')
-    secrets = configparser.ConfigParser()
-    secrets.read(SECRETS_PATH)
-    check_secrets_present(secrets, test_pypi)
+        if test_pypi:
+            check_output(*upload_cmd(secrets['pypi'], test_pypi))
+            return 0
 
-    if test_pypi:
+        version_file.check_git_status()
+
+        go, choices = '', {'Yes': True, 'No': False}
+
+        while not (go in choices):
+            go = input(f'Upload {version_file} to PyPI, and git-push tag and '
+                       f'{version_file.path} to origin HEAD ({"/".join(choices)})? ')
+
+        if choices[go] is False:
+            sys.stdout.write('Aborted\n')
+            return 0
+
         check_output(*upload_cmd(secrets['pypi'], test_pypi))
+
+        for cmd in version_file.git_push_tag_cmds:
+            check_output(*cmd)
+
         return 0
-
-    version_file.check_git_status()
-
-    go, choices = '', {'Yes': True, 'No': False}
-
-    while not (go in choices):
-        go = input(f'Upload {version_file} to PyPI, and git-push tag and '
-                   f'{version_file.path} to origin HEAD ({"/".join(choices)})? ')
-
-    if choices[go] is False:
-        sys.stdout.write('Aborted\n')
-        return 0
-
-    check_output(*upload_cmd(secrets['pypi'], test_pypi))
-
-    for cmd in version_file.git_push_tag_cmds:
-        check_output(*cmd)
-
-    return 0
