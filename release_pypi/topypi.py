@@ -76,7 +76,10 @@ class VersionFile:
 
 
 def check_output(*cmd):
-    sys.stdout.write(subprocess.check_output(cmd).decode())
+    completed_process = subprocess.run(cmd, stdout=sys.stdout, stderr=sys.stderr)
+
+    if completed_process.returncode:
+        raise subprocess.CalledProcessError(completed_process.returncode, ' '.join(cmd))
 
 
 def upload_cmd(config, test_pypi):
