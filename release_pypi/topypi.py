@@ -133,7 +133,7 @@ def release_pypi(*inc: int, test_pypi: 'Just push to test.pypi.org' = False,
         if os.path.isdir('dist'):
             shutil.rmtree('dist')
 
-        check_output('python', 'setup.py', 'sdist', 'bdist_wheel')
+        check_output('python', '-m', 'build')
         secrets = configparser.ConfigParser()
         secrets.read(SECRETS_PATH)
         check_secrets_present(secrets, test_pypi)
