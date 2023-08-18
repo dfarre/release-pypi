@@ -1,5 +1,6 @@
 import configparser
 import os
+import subprocess
 import unittest
 import unittest.mock as mock
 
@@ -54,8 +55,8 @@ class ToPyPiTests(unittest.TestCase):
     version_path = 'version.ini'
     secrets_path = '.secrets.ini'
     pypi_secrets = {'user': 'Alice', 'test_password': 'T', 'password': 'P'}
-    sdist_call = mock.call(('python', 'setup.py', 'sdist', 'bdist_wheel'))
-    twine_call = mock.call(('twine', 'fake'))
+    sdist_call = mock.call('python', 'setup.py', 'sdist', 'bdist_wheel')
+    twine_call = mock.call('twine', 'fake')
     git_status_call = mock.call(('git', 'status', '--porcelain'))
 
     def setUp(self):
@@ -81,7 +82,7 @@ class ToPyPiTests(unittest.TestCase):
 
     @staticmethod
     def git_push_calls(version):
-        return [mock.call(tup) for tup in [
+        return [mock.call(*tup) for tup in [
             ('git', 'add', 'version.ini'),
             ('git', 'commit', '-m', f'Bump version to {version}'),
             ('git', 'tag', str(version)),
@@ -103,15 +104,11 @@ class ToPyPiTests(unittest.TestCase):
         self.assert_upload_cmd(topypi.upload_cmd(self.pypi_secrets, True), True)
 
     @mock.patch('sys.stdout.write')
-    @mock.patch('subprocess.check_output', return_value=b'foo')
-    def test_check_output(self, check_output_mock, stdout_mock):
-        topypi.check_output('fake', 'cl')
-
-        check_output_mock.assert_called_once_with(('fake', 'cl'))
-        stdout_mock.assert_called_once_with('foo')
+    def test_check_output(self, stdout_mock):
+        self.assertRaises(subprocess.CalledProcessError, topypi.check_output, 'ls', '--fake=3')
 
     @mock.patch('release_pypi.topypi.upload_cmd', return_value=['twine', 'fake'])
-    @mock.patch('subprocess.check_output', return_value=b'Foo')
+    @mock.patch('release_pypi.topypi.check_output', return_value=b'Foo')
     def test_test_pypi(self, check_output_mock, upload_cmd_mock):
         assert topypi.release_pypi.call(1, 1, pre=1, dev=1, test_pypi=True) == 0
         assert list(map(str, upload_cmd_mock.call_args_list)) == [
@@ -121,7 +118,9 @@ class ToPyPiTests(unittest.TestCase):
     @mock.patch('builtins.input', return_value='Yes')
     @mock.patch('release_pypi.topypi.upload_cmd', return_value=['twine', 'fake'])
     @mock.patch('subprocess.check_output', return_value=b'M version.ini')
-    def test_yes(self, check_output_mock, upload_cmd_mock, input_mock):
+    @mock.patch('release_pypi.topypi.check_output', return_value=b'Foo')
+    def test_yes(self, custom_check_output_mock, check_output_mock, upload_cmd_mock,
+                 input_mock):
         assert topypi.release_pypi.call(1, dev=1, test_pypi=False) == 0
         version_file = topypi.VersionFile()
         input_mock.assert_called_once_with(
@@ -129,9 +128,9 @@ class ToPyPiTests(unittest.TestCase):
             ' to origin HEAD (Yes/No)? ')
         assert list(map(str, upload_cmd_mock.call_args_list)) == [
             'call(<Section: pypi>, False)']
-        assert check_output_mock.call_args_list == [
-            self.sdist_call, self.git_status_call, self.twine_call
-        ] + self.git_push_calls(version_file.v)
+        assert check_output_mock.call_args_list == [self.git_status_call]
+        assert custom_check_output_mock.call_args_list == [
+            self.sdist_call, self.twine_call] + self.git_push_calls(version_file.v)
 
     @mock.patch('subprocess.check_output', return_value=b'M version.ini')
     @mock.patch('builtins.input', return_value='No')
@@ -142,9 +141,9 @@ class ToPyPiTests(unittest.TestCase):
         input_mock.assert_called_once_with(
             f'Upload {version_file} to PyPI, and git-push tag and version.ini'
             ' to origin HEAD (Yes/No)? ')
-        assert len(stdout_mock.call_args_list) == 2
+        assert len(stdout_mock.call_args_list) == 1
         assert stdout_mock.call_args == mock.call('Aborted\n')
-        assert check_output_mock.call_args_list == [self.sdist_call, self.git_status_call]
+        assert check_output_mock.call_args_list == [self.git_status_call]
 
     @mock.patch('subprocess.check_output', return_value=b'M fake_file.py')
     @mock.patch('builtins.input')
@@ -152,8 +151,8 @@ class ToPyPiTests(unittest.TestCase):
     def test_wrong_git_status(self, stdout_mock, input_mock, check_output_mock):
         assert topypi.release_pypi.call(test_pypi=False) == 6
         input_mock.assert_not_called()
-        assert len(stdout_mock.call_args_list) == 1
-        assert check_output_mock.call_args_list == [self.sdist_call, self.git_status_call]
+        assert len(stdout_mock.call_args_list) == 0
+        assert check_output_mock.call_args_list == [self.git_status_call]
 
     @mock.patch('subprocess.check_output', return_value=b'Fake output')
     @mock.patch('builtins.input')
