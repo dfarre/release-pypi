@@ -54,8 +54,8 @@ class ToPyPiTests(unittest.TestCase):
     version_path = 'version.ini'
     secrets_path = '.secrets.ini'
     pypi_secrets = {'user': 'Alice', 'test_password': 'T', 'password': 'P'}
-    sdist_call = mock.call(('python', 'setup.py', 'sdist', 'bdist_wheel'))
-    twine_call = mock.call(('twine', 'fake'))
+    sdist_call = mock.call('python', '-m', 'build')
+    twine_call = mock.call('twine', 'fake')
     git_status_call = mock.call(('git', 'status', '--porcelain'))
     git_push_calls = [mock.call(tup) for tup in [
         ('git', 'add', 'version.ini'),
