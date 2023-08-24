@@ -58,7 +58,7 @@ class VersionFile:
 
         if git_status != f'M {self.path}':
             if f'{self.path}_bk' in git_status:
-                raise WrongGitStatus(f'Please, add {self.path}_bk to the git-ignore list.')
+                raise WrongGitStatus(f"Please, add '{self.path}_bk' to the git-ignore list.")
 
             raise WrongGitStatus(f'Clean the git status to push a commit with the new {self.path} only.')
 
