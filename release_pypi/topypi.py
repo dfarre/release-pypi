@@ -57,8 +57,10 @@ class VersionFile:
         git_status = subprocess.check_output(('git', 'status', '--porcelain')).decode().strip()
 
         if git_status != f'M {self.path}':
-            raise WrongGitStatus('Clean the git status to push a commit '
-                                 f'with the new {self.path} only')
+            if f'{self.path}_bk' in git_status:
+                raise WrongGitStatus(f'Please, add {self.path}_bk to the git-ignore list.')
+
+            raise WrongGitStatus(f'Clean the git status to push a commit with the new {self.path} only.')
 
     def put(self, text, key='value'):
         self.ini['version'][key] = text
