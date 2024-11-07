@@ -101,8 +101,8 @@ def release_pypi(test_pypi: 'Just push to test.pypi.org' = False,
     go, choices = '', {'Yes': True, 'No': False}
 
     while not (go in choices):
-        go = input(f'Upload {version_file} to PyPI, and git-push tag and '
-                   f'{version_file.path} to origin HEAD ({"/".join(choices)})? ')
+        go = input(f'Upload {version_file} to PyPI, and git-push the version tag and '
+                   f'the {version_file.path} file to origin HEAD ({"/".join(choices)})? ')
 
     if choices[go] is False:
         sys.stdout.write('Aborted\n')

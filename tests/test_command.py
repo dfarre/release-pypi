@@ -79,8 +79,8 @@ class ToPyPiTests(unittest.TestCase):
                  input_mock):
         assert topypi.release_pypi.call(version_toml=self.version_path, test_pypi=False) == 0
         input_mock.assert_called_once_with(
-            'Upload foo==0.3rc0 to PyPI, and git-push tag and test_pyproject.toml'
-            ' to origin HEAD (Yes/No)? ')
+            'Upload foo==0.3rc0 to PyPI, and git-push the version tag and the '
+            'test_pyproject.toml file to origin HEAD (Yes/No)? ')
         assert list(map(str, upload_cmd_mock.call_args_list)) == [
             'call(<Section: pypi>, False)']
         assert check_output_mock.call_args_list == [self.git_status_call]
@@ -93,8 +93,8 @@ class ToPyPiTests(unittest.TestCase):
     def test_aborted(self, stdout_mock, input_mock, check_output_mock):
         assert topypi.release_pypi.call(version_toml=self.version_path, test_pypi=False) == 0
         input_mock.assert_called_once_with(
-            'Upload foo==0.3rc0 to PyPI, and git-push tag and test_pyproject.toml'
-            ' to origin HEAD (Yes/No)? ')
+            'Upload foo==0.3rc0 to PyPI, and git-push the version tag and the '
+            'test_pyproject.toml file to origin HEAD (Yes/No)? ')
         assert len(stdout_mock.call_args_list) == 1
         assert stdout_mock.call_args == mock.call('Aborted\n')
         assert check_output_mock.call_args_list == [self.git_status_call]
