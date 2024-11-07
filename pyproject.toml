@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "release-pypi"
-version = "2.1.1rc0"
+version = "3.0.0rc0"
 description = "Simple PyPI uploader, using Twine."
 readme = "README.md"
 requires-python = ">=3.11"
