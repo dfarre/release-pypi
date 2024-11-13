@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "release-pypi"
+version = "3.0.0rc0"
+description = "Simple PyPI uploader, using Twine."
+readme = "README.md"
+requires-python = ">=3.11"
+license = {file = "LICENSE"}
+authors = [
+  {name = "Daniel Farré Manzorro", email = "d.farre.m@gmail.com" }
+]
+maintainers = [
+  {name = "Daniel Farré Manzorro", email = "d.farre.m@gmail.com" }
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
+    "Development Status :: 4 - Beta",
+]
+dependencies = [
+    "build",
+    "twine",
+    "packaging",
+    "simple-cmd",
+    "urllib3<2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ipdb",
+    "ipython",
+]
+test = [
+    "pytest-cov",
+]
+
+[project.scripts]
+release-pypi = "release_pypi.topypi:release_pypi"
+
+[project.urls]
+"Homepage" = "https://github.com/dfarre/release-pypi"
+"Bug Reports" = "https://github.com/dfarre/release-pypi/issues"
+"Source" = "https://github.com/dfarre/release-pypi"

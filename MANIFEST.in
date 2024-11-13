@@ -1,4 +1,0 @@
-include LICENSE
-include version.ini
-
-exclude tests/**
